@@ -97,6 +97,34 @@
     return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
   }
 
+  /* ---------- Confirmation stylée (remplace window.confirm) ---------- */
+  var confirmResolve = null;
+
+  function askConfirm(opts) {
+    return new Promise(function (resolve) {
+      $("#confirm-title").textContent = opts.title || "Confirmer ?";
+      $("#confirm-message").textContent = opts.message || "";
+      var ok = $("#confirm-ok");
+      ok.textContent = opts.confirmLabel || "Confirmer";
+      ok.className = opts.danger === false ? "btn-primary" : "btn-danger";
+      document.querySelector("#confirm-modal .modal-confirm").classList.toggle("is-safe", opts.danger === false);
+      $("#confirm-modal").hidden = false;
+      document.body.style.overflow = "hidden";
+      confirmResolve = resolve;
+      setTimeout(function () { $("#confirm-cancel").focus(); }, 60);
+    });
+  }
+
+  function closeConfirm(result) {
+    if (!confirmResolve) return;
+    $("#confirm-modal").hidden = true;
+    // ne pas rendre le scroll si la modale de dépense est encore ouverte dessous
+    document.body.style.overflow = $("#expense-modal").hidden ? "" : "hidden";
+    var r = confirmResolve;
+    confirmResolve = null;
+    r(result);
+  }
+
   function toast(msg, isError) {
     var box = $("#toasts");
     var el = document.createElement("div");
@@ -825,66 +853,25 @@
 
   function deleteExpense() {
     if (!state.editingId) return;
-    if (!window.confirm(cloud
-      ? "Supprimer cette dépense pour tout le monde ? C'est définitif."
-      : "Supprimer cette dépense ? C'est définitif.")) return;
     var id = state.editingId;
-    if (cloud) {
-      cloud.expRef.doc(id).delete();
-    } else {
-      state.data.expenses = state.data.expenses.filter(function (x) { return x.id !== id; });
-      saveData();
-      renderAll();
-    }
-    closeModal();
-    toast("Dépense supprimée");
-  }
-
-  /* ================= Export / import ================= */
-
-  function exportData() {
-    var blob = new Blob([JSON.stringify(state.data, null, 2)], { type: "application/json" });
-    var a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = "caribou-" + todayISO() + ".json";
-    a.click();
-    URL.revokeObjectURL(a.href);
-    toast("Fichier exporté — envoie-le au groupe !");
-  }
-
-  function importData(file) {
-    var reader = new FileReader();
-    reader.onload = function () {
-      var incoming;
-      try { incoming = JSON.parse(reader.result); } catch (e) { toast("Fichier invalide", true); return; }
-      if (!incoming || !Array.isArray(incoming.expenses)) { toast("Fichier invalide", true); return; }
-
-      // Fusion : on garde toutes les dépenses, sans doublons (par id)
-      var known = {};
-      state.data.expenses.forEach(function (x) { known[x.id] = true; });
-      var toAdd = [];
-      incoming.expenses.forEach(function (x) {
-        if (x && x.id && !known[x.id]) toAdd.push(x);
-      });
-      var rateOk = typeof incoming.eurToCad === "number" && incoming.eurToCad > 0;
-
+    askConfirm({
+      title: "Supprimer la dépense ?",
+      message: cloud
+        ? "Elle disparaîtra pour tout le monde. C'est définitif."
+        : "Elle sera supprimée de cet appareil. C'est définitif.",
+      confirmLabel: "Supprimer"
+    }).then(function (yes) {
+      if (!yes) return;
       if (cloud) {
-        var batch = cloud.db.batch();
-        toAdd.forEach(function (x) { batch.set(cloud.expRef.doc(x.id), x); });
-        batch.commit().catch(function () { toast("Import cloud échoué, réessaie", true); });
-        if (rateOk) cloud.tripRef.set({ eurToCad: incoming.eurToCad }, { merge: true });
+        cloud.expRef.doc(id).delete();
       } else {
-        toAdd.forEach(function (x) { state.data.expenses.push(x); });
-        if (rateOk) {
-          state.data.eurToCad = incoming.eurToCad;
-          $("#rate-input").value = state.data.eurToCad;
-        }
+        state.data.expenses = state.data.expenses.filter(function (x) { return x.id !== id; });
         saveData();
         renderAll();
       }
-      toast(toAdd.length + " dépense(s) importée(s)");
-    };
-    reader.readAsText(file);
+      closeModal();
+      toast("Dépense supprimée");
+    });
   }
 
   /* ================= App ================= */
@@ -925,7 +912,19 @@
     });
 
     $("#logout-btn").addEventListener("click", function () {
-      if (window.confirm("Se déconnecter de cet appareil ?")) logout();
+      askConfirm({
+        title: "Se déconnecter ?",
+        message: "Tu devras retaper ton mot de passe la prochaine fois.",
+        confirmLabel: "Se déconnecter",
+        danger: false
+      }).then(function (yes) { if (yes) logout(); });
+    });
+
+    // Modale de confirmation
+    $("#confirm-cancel").addEventListener("click", function () { closeConfirm(false); });
+    $("#confirm-ok").addEventListener("click", function () { closeConfirm(true); });
+    $("#confirm-modal").addEventListener("click", function (e) {
+      if (e.target === $("#confirm-modal")) closeConfirm(false);
     });
 
     $("#add-expense-btn").addEventListener("click", function () { openModal(null); });
@@ -935,7 +934,9 @@
       if (e.target === $("#expense-modal")) closeModal();
     });
     document.addEventListener("keydown", function (e) {
-      if (e.key === "Escape" && !$("#expense-modal").hidden) closeModal();
+      if (e.key !== "Escape") return;
+      if (!$("#confirm-modal").hidden) closeConfirm(false);
+      else if (!$("#expense-modal").hidden) closeModal();
     });
     $("#expense-form").addEventListener("submit", submitExpense);
     $("#exp-delete").addEventListener("click", deleteExpense);
@@ -966,26 +967,26 @@
         toast("Taux mis à jour : 1 € = " + v + " $ CAD");
       }
     });
-    $("#export-btn").addEventListener("click", exportData);
-    $("#import-btn").addEventListener("click", function () { $("#import-file").click(); });
-    $("#import-file").addEventListener("change", function () {
-      if (this.files && this.files[0]) importData(this.files[0]);
-      this.value = "";
-    });
     $("#reset-btn").addEventListener("click", function () {
-      if (!window.confirm(cloud
-        ? "Effacer TOUTES les dépenses, pour tout le monde ? Pense à exporter avant."
-        : "Effacer TOUTES les dépenses de cet appareil ? Pense à exporter avant.")) return;
-      if (cloud) {
-        var batch = cloud.db.batch();
-        state.data.expenses.forEach(function (x) { batch.delete(cloud.expRef.doc(x.id)); });
-        batch.commit().catch(function () { toast("Effacement cloud échoué, réessaie", true); });
-      } else {
-        state.data.expenses = [];
-        saveData();
-        renderAll();
-      }
-      toast("Tout est effacé");
+      askConfirm({
+        title: "Tout effacer ?",
+        message: cloud
+          ? "Toutes les dépenses du voyage seront supprimées, pour tout le monde. Irréversible."
+          : "Toutes les dépenses de cet appareil seront supprimées. Irréversible.",
+        confirmLabel: "Tout effacer"
+      }).then(function (yes) {
+        if (!yes) return;
+        if (cloud) {
+          var batch = cloud.db.batch();
+          state.data.expenses.forEach(function (x) { batch.delete(cloud.expRef.doc(x.id)); });
+          batch.commit().catch(function () { toast("Effacement cloud échoué, réessaie", true); });
+        } else {
+          state.data.expenses = [];
+          saveData();
+          renderAll();
+        }
+        toast("Tout est effacé");
+      });
     });
   }
 

@@ -1033,6 +1033,45 @@ input[type="date"] { color-scheme: dark; }
   color: var(--text);
 }
 
+/* ---------- Modale de confirmation ---------- */
+.modal-confirm {
+  max-width: 380px;
+  text-align: center;
+  padding: 28px 24px 22px;
+}
+.modal-confirm h2 {
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  font-weight: 800;
+  margin: 0 0 8px;
+}
+.modal-confirm p {
+  color: var(--text-dim);
+  font-size: 0.95rem;
+  margin: 0 0 22px;
+  line-height: 1.5;
+}
+.confirm-icon {
+  width: 56px;
+  height: 56px;
+  margin: 0 auto 14px;
+  border-radius: 18px;
+  display: grid;
+  place-items: center;
+  background: rgba(248, 113, 113, 0.13);
+  color: var(--danger);
+}
+.confirm-icon svg { width: 26px; height: 26px; }
+.modal-confirm.is-safe .confirm-icon {
+  background: rgba(245, 158, 11, 0.14);
+  color: var(--gold);
+}
+.confirm-actions {
+  display: flex;
+  gap: 10px;
+}
+.confirm-actions button { flex: 1; justify-content: center; }
+
 /* ---------- Toasts ---------- */
 .toasts {
   position: fixed;

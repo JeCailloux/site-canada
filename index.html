@@ -227,25 +227,13 @@
         </article>
 
         <article class="card">
-          <h2 class="card-title">Synchronisation entre potes</h2>
-          <p class="card-sub" id="sync-status">Mode local : les données restent dans ce navigateur.</p>
-          <p class="card-sub">L'export / import JSON reste disponible en secours ou pour faire des sauvegardes.</p>
-          <div class="btn-row">
-            <button class="btn-ghost" id="export-btn">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></svg>
-              Exporter
-            </button>
-            <button class="btn-ghost" id="import-btn">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 8 5-5 5 5"/><path d="M12 3v12"/></svg>
-              Importer
-            </button>
-            <input type="file" id="import-file" accept="application/json" hidden>
-          </div>
+          <h2 class="card-title">Synchronisation</h2>
+          <p class="card-sub" id="sync-status">Connexion à la base en cours…</p>
         </article>
 
         <article class="card card-danger">
           <h2 class="card-title">Zone dangereuse</h2>
-          <p class="card-sub">Supprime toutes les dépenses de cet appareil. Irréversible.</p>
+          <p class="card-sub">Supprime toutes les dépenses du voyage. Irréversible.</p>
           <button class="btn-danger" id="reset-btn">Tout effacer</button>
         </article>
 
@@ -314,6 +302,21 @@
           <button type="submit" class="btn-primary" id="exp-save">Enregistrer</button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- ================= MODALE DE CONFIRMATION ================= -->
+  <div class="modal-backdrop" id="confirm-modal" hidden>
+    <div class="modal modal-confirm" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" aria-describedby="confirm-message">
+      <div class="confirm-icon" id="confirm-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+      </div>
+      <h2 id="confirm-title">Confirmer</h2>
+      <p id="confirm-message"></p>
+      <div class="confirm-actions">
+        <button type="button" class="btn-ghost" id="confirm-cancel">Annuler</button>
+        <button type="button" class="btn-danger" id="confirm-ok">Confirmer</button>
+      </div>
     </div>
   </div>
 

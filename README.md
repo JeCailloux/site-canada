@@ -53,7 +53,8 @@ connecté.
 - ⚖️ Soldes en temps réel + **remboursements optimisés** (minimum de virements)
 - 📊 Onglet **Stats** : camembert par catégorie, courbe du total cumulé, podium des
   payeurs, records (plus grosse dépense, journée la plus chère, rythme de perte…)
-- 📤 Export / 📥 import JSON pour synchroniser les comptes entre potes
+- ☁️ Synchro **temps réel** entre tous les appareils (Firebase Firestore), avec
+  mode hors-ligne (les modifications partent à la reconnexion)
 - 🌌 Fond 3D animé : aurores boréales, montagnes low-poly, neige (Three.js)
 - 🦌 Vidéo du caribou qui court (générée avec VEO) en fond de l'écran d'accueil,
   fondue dans la scène 3D avec une boucle invisible (`assets/caribou.mp4`)
@@ -89,4 +90,3 @@ service cloud.firestore {
 > dans `js/config.js` → l'app repasse en mode 100% local, sans rien casser.
 
 L'état de la synchro est affiché dans **Réglages → Synchronisation**.
-L'export / import JSON reste disponible en secours (sauvegardes).
