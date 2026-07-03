@@ -62,6 +62,8 @@ body {
   z-index: -3;
   display: block;
 }
+/* Page de connexion : vidéo seule. Le décor 3D n'apparaît qu'une fois connecté. */
+body:not(.in-app) #bg3d { display: none; }
 
 /* ---------- Vidéo caribou (page de login) ----------
    Masquée en dégradé radial : les bords fondent dans la

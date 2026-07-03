@@ -131,6 +131,9 @@
       var bx = x / 12, bz = (zz - 10) / 8;
       var basin = Math.exp(-(bx * bx + bz * bz));
       h = h * (1 - basin * 0.9) - basin * 1.6;
+      // aplatir l'avant-scène : pas de pics collés à la caméra
+      var front = Math.max(0, (zz - 14) / 8);
+      h *= Math.max(0, 1 - front * front);
     }
     return h;
   }
@@ -182,14 +185,6 @@
     var mesh = new THREE.Mesh(geo, mat);
     mesh.position.set(0, -2.5, o.z);
     scene.add(mesh);
-
-    var wire = new THREE.Mesh(
-      geo,
-      new THREE.MeshBasicMaterial({ color: 0x38bdf8, wireframe: true, transparent: true, opacity: 0.04, fog: true })
-    );
-    wire.position.copy(mesh.position);
-    wire.position.y += 0.02;
-    scene.add(wire);
 
     return mesh;
   }
@@ -472,6 +467,9 @@
     var dt = Math.min(clock.getDelta(), 0.05);
     var t = clock.elapsedTime;
 
+    // canvas masqué (page de connexion) : on ne rend rien
+    if (!canvas.offsetWidth) return;
+
     if (auroraMat) auroraMat.uniforms.uTime.value = t;
     if (lakeMat) lakeMat.uniforms.uTime.value = t;
 
@@ -488,11 +486,11 @@
       p.needsUpdate = true;
     }
 
-    // parallaxe douce
+    // parallaxe douce (discrète pour éviter les angles rasants sur les bords)
     targetX += (mouseX - targetX) * 0.03;
     targetY += (mouseY - targetY) * 0.03;
-    camera.position.x = targetX * 2.2;
-    camera.position.y = 4.2 + targetY * 1.1 + Math.sin(t * 0.4) * 0.15;
+    camera.position.x = targetX * 1.1;
+    camera.position.y = 4.2 + targetY * 0.6 + Math.sin(t * 0.4) * 0.12;
     camera.lookAt(0, 6, -40);
 
     renderer.render(scene, camera);

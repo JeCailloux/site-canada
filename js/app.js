@@ -806,6 +806,7 @@
     $("#view-login").hidden = true;
     $("#view-login").style.display = "none";
     $("#view-app").hidden = false;
+    document.body.classList.add("in-app"); // affiche le décor 3D
 
     // La vidéo du caribou n'accompagne que l'écran d'accueil
     var vb = $("#video-bg");
