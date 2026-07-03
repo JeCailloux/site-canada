@@ -58,18 +58,35 @@ connecté.
 - 🦌 Vidéo du caribou qui court (générée avec VEO) en fond de l'écran d'accueil,
   fondue dans la scène 3D avec une boucle invisible (`assets/caribou.mp4`)
 
-## ⚠️ Limite à connaître (et comment la contourner)
+## ☁️ Synchro temps réel (Firebase Firestore)
 
-Le site étant statique, **les données restent dans le navigateur de chacun** :
-si Bastien ajoute une dépense sur son téléphone, Léo ne la voit pas automatiquement.
+Le site est branché sur une base **Firestore** (gratuite) : les dépenses se
+synchronisent en temps réel entre tous les appareils, avec cache hors-ligne
+(ça marche sans réseau, ça repart tout seul à la reconnexion).
 
-Deux solutions :
+### Activation (une seule fois, dans la console Firebase)
 
-1. **Simple** : une seule personne tient les comptes (le "trésorier" du voyage), et
-   partage l'écran / exporte le fichier de temps en temps.
-2. **Export / import** : Réglages → Exporter → envoie le fichier `.json` sur le groupe
-   WhatsApp → chacun fait Réglages → Importer. L'import **fusionne** sans doublons,
-   donc chacun peut ajouter ses dépenses et on peut croiser les fichiers.
+Console Firebase → projet → **Firestore Database** → onglet **Règles** →
+remplace tout par ceci → **Publier** :
 
-Si un jour vous voulez une vraie synchro temps réel, il suffira de brancher un backend
-gratuit (Supabase ou Firebase) — la structure des données est déjà prête pour ça.
+```
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /trips/canada-2026-vx4k7p {
+      allow read, write: if true;
+      match /expenses/{expenseId} {
+        allow read, write: if true;
+      }
+    }
+  }
+}
+```
+
+> Le chemin `canada-2026-vx4k7p` doit correspondre au `tripId` de `js/config.js`.
+> Ces règles n'ouvrent QUE le document du voyage (le suffixe aléatoire fait office
+> de mot de passe d'accès à la base). Pour couper la synchro : `firebase: null`
+> dans `js/config.js` → l'app repasse en mode 100% local, sans rien casser.
+
+L'état de la synchro est affiché dans **Réglages → Synchronisation**.
+L'export / import JSON reste disponible en secours (sauvegardes).

@@ -51,6 +51,8 @@
     selectedLoginId: null
   };
 
+  var cloud = null; // synchro Firestore (null = mode 100% local)
+
   /* ================= Utilitaires ================= */
 
   function $(sel) { return document.querySelector(sel); }
@@ -125,6 +127,74 @@
 
   function saveData() {
     localStorage.setItem(LS_DATA, JSON.stringify(state.data));
+  }
+
+  /* ================= Synchro cloud (Firestore) ================= */
+
+  function updateSyncBadge(ok, code) {
+    var el = $("#sync-status");
+    if (!el) return;
+    el.classList.toggle("on", !!ok);
+    if (ok) {
+      el.textContent = "Synchro temps réel active : tout le crew voit les mêmes comptes.";
+    } else if (code === "permission-denied") {
+      el.textContent = "Synchro refusée : les règles de sécurité Firestore ne sont pas en place (voir README).";
+    } else {
+      el.textContent = "Hors ligne : tes modifications partiront à la reconnexion.";
+    }
+  }
+
+  function initCloud() {
+    if (!CFG.firebase || typeof firebase === "undefined") return;
+    var db;
+    try {
+      firebase.initializeApp(CFG.firebase);
+      db = firebase.firestore();
+      // cache hors-ligne : l'app marche sans réseau, ça repart tout seul
+      db.enablePersistence({ synchronizeTabs: true }).catch(function () {});
+    } catch (e) {
+      cloud = null;
+      return;
+    }
+    var tripRef = db.collection("trips").doc(CFG.tripId || "canada");
+    cloud = { db: db, tripRef: tripRef, expRef: tripRef.collection("expenses") };
+
+    var firstSnap = true;
+    cloud.expRef.onSnapshot(function (snap) {
+      // premier contact : si le cloud est vide mais que cet appareil a déjà
+      // des dépenses, on les envoie (migration en douceur)
+      if (firstSnap && snap.empty && state.data.expenses.length) {
+        firstSnap = false;
+        var batch = db.batch();
+        state.data.expenses.forEach(function (x) { batch.set(cloud.expRef.doc(x.id), x); });
+        batch.commit().catch(function () {});
+        updateSyncBadge(true);
+        return; // le snapshot suivant contiendra tout
+      }
+      firstSnap = false;
+      var list = [];
+      snap.forEach(function (d) { list.push(d.data()); });
+      state.data.expenses = list;
+      saveData();
+      updateSyncBadge(true);
+      if (state.user) renderAll();
+    }, function (err) {
+      updateSyncBadge(false, err && err.code);
+      if (err && err.code === "permission-denied") {
+        toast("Synchro refusée : règles Firestore à configurer", true);
+      }
+    });
+
+    cloud.tripRef.onSnapshot(function (doc) {
+      var d = doc.data();
+      if (d && typeof d.eurToCad === "number" && d.eurToCad > 0 && d.eurToCad !== state.data.eurToCad) {
+        state.data.eurToCad = d.eurToCad;
+        saveData();
+        var ri = $("#rate-input");
+        if (ri) ri.value = d.eurToCad;
+        if (state.user) renderAll();
+      }
+    });
   }
 
   /* ================= Auth / session ================= */
@@ -721,44 +791,51 @@
     if (!date) { err.textContent = "Choisis une date."; err.hidden = false; return; }
     err.hidden = true;
 
-    if (state.editingId) {
-      var exp = state.data.expenses.filter(function (x) { return x.id === state.editingId; })[0];
-      if (exp) {
-        exp.title = title;
-        exp.amount = Math.round(amount * 100) / 100;
-        exp.currency = state.modalCurrency;
-        exp.payerId = state.modalPayer;
-        exp.participants = state.modalParts.slice();
-        exp.category = state.modalCat;
-        exp.date = date;
-      }
-      toast("Dépense modifiée");
+    var editing = !!state.editingId;
+    var existing = editing
+      ? state.data.expenses.filter(function (x) { return x.id === state.editingId; })[0]
+      : null;
+    var payload = {
+      id: editing ? state.editingId : uid(),
+      title: title,
+      amount: Math.round(amount * 100) / 100,
+      currency: state.modalCurrency,
+      payerId: state.modalPayer,
+      participants: state.modalParts.slice(),
+      category: state.modalCat,
+      date: date,
+      createdBy: existing ? existing.createdBy : state.user.id,
+      createdAt: existing ? existing.createdAt : new Date().toISOString()
+    };
+
+    if (cloud) {
+      cloud.expRef.doc(payload.id).set(payload); // le snapshot met l'UI à jour
     } else {
-      state.data.expenses.push({
-        id: uid(),
-        title: title,
-        amount: Math.round(amount * 100) / 100,
-        currency: state.modalCurrency,
-        payerId: state.modalPayer,
-        participants: state.modalParts.slice(),
-        category: state.modalCat,
-        date: date,
-        createdBy: state.user.id,
-        createdAt: new Date().toISOString()
-      });
-      toast("Dépense ajoutée");
+      if (editing) {
+        state.data.expenses = state.data.expenses.map(function (x) { return x.id === payload.id ? payload : x; });
+      } else {
+        state.data.expenses.push(payload);
+      }
+      saveData();
+      renderAll();
     }
-    saveData();
-    renderAll();
+    toast(editing ? "Dépense modifiée" : "Dépense ajoutée");
     closeModal();
   }
 
   function deleteExpense() {
     if (!state.editingId) return;
-    if (!window.confirm("Supprimer cette dépense ? C'est définitif.")) return;
-    state.data.expenses = state.data.expenses.filter(function (x) { return x.id !== state.editingId; });
-    saveData();
-    renderAll();
+    if (!window.confirm(cloud
+      ? "Supprimer cette dépense pour tout le monde ? C'est définitif."
+      : "Supprimer cette dépense ? C'est définitif.")) return;
+    var id = state.editingId;
+    if (cloud) {
+      cloud.expRef.doc(id).delete();
+    } else {
+      state.data.expenses = state.data.expenses.filter(function (x) { return x.id !== id; });
+      saveData();
+      renderAll();
+    }
     closeModal();
     toast("Dépense supprimée");
   }
@@ -785,17 +862,27 @@
       // Fusion : on garde toutes les dépenses, sans doublons (par id)
       var known = {};
       state.data.expenses.forEach(function (x) { known[x.id] = true; });
-      var added = 0;
+      var toAdd = [];
       incoming.expenses.forEach(function (x) {
-        if (x && x.id && !known[x.id]) { state.data.expenses.push(x); added++; }
+        if (x && x.id && !known[x.id]) toAdd.push(x);
       });
-      if (typeof incoming.eurToCad === "number" && incoming.eurToCad > 0) {
-        state.data.eurToCad = incoming.eurToCad;
-        $("#rate-input").value = state.data.eurToCad;
+      var rateOk = typeof incoming.eurToCad === "number" && incoming.eurToCad > 0;
+
+      if (cloud) {
+        var batch = cloud.db.batch();
+        toAdd.forEach(function (x) { batch.set(cloud.expRef.doc(x.id), x); });
+        batch.commit().catch(function () { toast("Import cloud échoué, réessaie", true); });
+        if (rateOk) cloud.tripRef.set({ eurToCad: incoming.eurToCad }, { merge: true });
+      } else {
+        toAdd.forEach(function (x) { state.data.expenses.push(x); });
+        if (rateOk) {
+          state.data.eurToCad = incoming.eurToCad;
+          $("#rate-input").value = state.data.eurToCad;
+        }
+        saveData();
+        renderAll();
       }
-      saveData();
-      renderAll();
-      toast(added + " dépense(s) importée(s)");
+      toast(toAdd.length + " dépense(s) importée(s)");
     };
     reader.readAsText(file);
   }
@@ -874,6 +961,7 @@
       if (v > 0) {
         state.data.eurToCad = v;
         saveData();
+        if (cloud) cloud.tripRef.set({ eurToCad: v }, { merge: true });
         renderAll();
         toast("Taux mis à jour : 1 € = " + v + " $ CAD");
       }
@@ -885,10 +973,18 @@
       this.value = "";
     });
     $("#reset-btn").addEventListener("click", function () {
-      if (!window.confirm("Effacer TOUTES les dépenses de cet appareil ? Pense à exporter avant.")) return;
-      state.data.expenses = [];
-      saveData();
-      renderAll();
+      if (!window.confirm(cloud
+        ? "Effacer TOUTES les dépenses, pour tout le monde ? Pense à exporter avant."
+        : "Effacer TOUTES les dépenses de cet appareil ? Pense à exporter avant.")) return;
+      if (cloud) {
+        var batch = cloud.db.batch();
+        state.data.expenses.forEach(function (x) { batch.delete(cloud.expRef.doc(x.id)); });
+        batch.commit().catch(function () { toast("Effacement cloud échoué, réessaie", true); });
+      } else {
+        state.data.expenses = [];
+        saveData();
+        renderAll();
+      }
       toast("Tout est effacé");
     });
   }
@@ -907,6 +1003,7 @@
       return;
     }
     loadData();
+    initCloud();
     buildLogin();
     buildModalChoices();
     bindApp();

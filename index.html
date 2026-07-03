@@ -228,7 +228,8 @@
 
         <article class="card">
           <h2 class="card-title">Synchronisation entre potes</h2>
-          <p class="card-sub">Les données vivent dans ce navigateur. Pour partager : exporte le fichier et envoie-le au groupe, chacun l'importe.</p>
+          <p class="card-sub" id="sync-status">Mode local : les données restent dans ce navigateur.</p>
+          <p class="card-sub">L'export / import JSON reste disponible en secours ou pour faire des sauvegardes.</p>
           <div class="btn-row">
             <button class="btn-ghost" id="export-btn">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></svg>
@@ -320,6 +321,8 @@
 
   <script src="https://unpkg.com/three@0.147.0/build/three.min.js" defer></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js" defer></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js" defer></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js" defer></script>
   <script src="js/config.js" defer></script>
   <script src="js/video-bg.js" defer></script>
   <script src="js/bg3d.js" defer></script>

@@ -19,6 +19,20 @@ window.CARIBOU_CONFIG = {
   // Taux par défaut : 1 EUR = X CAD (modifiable ensuite dans Réglages)
   eurToCadDefault: 1.48,
 
+  // ---- SYNCHRO CLOUD (Firebase Firestore) ----
+  // Identifiant du voyage dans la base (le suffixe aléatoire évite les curieux).
+  // Ne pas le changer une fois les comptes lancés.
+  tripId: "canada-2026-vx4k7p",
+  // Mets `firebase: null` pour revenir au mode 100% local (sans synchro).
+  firebase: {
+    apiKey: "AIzaSyBHAqKSxw7DD9dhcFeZ2xkngYQlLFX0vlA",
+    authDomain: "caribuo-dabda.firebaseapp.com",
+    projectId: "caribuo-dabda",
+    storageBucket: "caribuo-dabda.firebasestorage.app",
+    messagingSenderId: "689372314202",
+    appId: "1:689372314202:web:49aec0de6acd58e66db663"
+  },
+
   // ---- LES 4 COMPTES ----
   // id      : identifiant technique (ne pas changer une fois des dépenses créées)
   // name    : prénom affiché

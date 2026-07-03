@@ -867,6 +867,9 @@ input[type="date"] { color-scheme: dark; }
 .field-inline input { width: 110px; }
 .unit { color: var(--text-dim); font-weight: 700; font-size: 0.9rem; }
 .btn-row { display: flex; gap: 10px; flex-wrap: wrap; }
+#sync-status { font-weight: 700; }
+#sync-status.on { color: var(--aurora); }
+
 .footer-note {
   text-align: center;
   color: #475569;
