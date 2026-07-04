@@ -232,6 +232,7 @@ body:not(.in-app) #bg3d { display: none; }
 
 /* ---------- Champs ---------- */
 .field { display: block; margin-bottom: 16px; }
+.field[hidden] { display: none; }
 .field-label {
   display: block;
   font-size: 0.82rem;
