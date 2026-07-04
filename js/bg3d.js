@@ -21,7 +21,7 @@
     return;
   }
 
-  var renderer, scene, camera, auroraMat, lakeMat, snow, snowVel, mountains, mountainsFar;
+  var renderer, scene, camera, auroraMat, lakeMat, snow, snowVel, mountains, mountainsFar, caribou;
   var mouseX = 0, mouseY = 0, targetX = 0, targetY = 0;
   var clock = new THREE.Clock();
   var SNOW_COUNT = 1300;
@@ -45,6 +45,7 @@
     buildLake();
     buildMeadow();
     buildMoon();
+    caribou = buildCaribou();
     buildSnow();
     buildStars();
 
@@ -413,6 +414,127 @@
     scene.add(disc);
   }
 
+  /* ---------- Caribou low-poly qui se promène et boit au lac ---------- */
+  function terrainY(x, z) {
+    return -2.5 + groundHeight(x, z + 6, 3.4, true);
+  }
+
+  function buildCaribou() {
+    var g = new THREE.Group();
+    function box(w, h, d, color) {
+      return new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshBasicMaterial({ color: color, fog: true }));
+    }
+
+    var bodyY = 1.0;
+    var body = box(0.55, 0.62, 1.5, 0x5a4632);
+    body.position.set(0, bodyY, 0);
+    g.add(body);
+
+    var rump = box(0.58, 0.42, 0.42, 0xcabfa6); // tache claire arrière
+    rump.position.set(0, bodyY + 0.06, -0.62);
+    g.add(rump);
+
+    // cou + tête (pivot pour boire)
+    var neckPivot = new THREE.Group();
+    neckPivot.position.set(0, bodyY + 0.14, 0.72);
+    g.add(neckPivot);
+    var neck = box(0.34, 0.72, 0.34, 0x63503a);
+    neck.position.set(0, 0.3, 0.12);
+    neck.rotation.x = -0.5;
+    neckPivot.add(neck);
+    var head = box(0.3, 0.34, 0.62, 0x63503a);
+    head.position.set(0, 0.64, 0.42);
+    neckPivot.add(head);
+    var muzzle = box(0.22, 0.2, 0.24, 0x3a2c20);
+    muzzle.position.set(0, 0.6, 0.74);
+    neckPivot.add(muzzle);
+    var earL = box(0.06, 0.18, 0.12, 0x4a3a2a); earL.position.set(0.16, 0.78, 0.28); neckPivot.add(earL);
+    var earR = box(0.06, 0.18, 0.12, 0x4a3a2a); earR.position.set(-0.16, 0.78, 0.28); neckPivot.add(earR);
+
+    // bois
+    function antler(side) {
+      var a = new THREE.Group();
+      a.position.set(0.11 * side, 0.82, 0.34);
+      neckPivot.add(a);
+      var beam = box(0.05, 0.66, 0.05, 0xb8a98f); beam.position.set(0.09 * side, 0.28, 0); beam.rotation.z = -0.45 * side; a.add(beam);
+      var t1 = box(0.04, 0.32, 0.04, 0xb8a98f); t1.position.set(0.2 * side, 0.5, 0.06); t1.rotation.z = -0.95 * side; a.add(t1);
+      var t2 = box(0.04, 0.26, 0.04, 0xb8a98f); t2.position.set(0.26 * side, 0.34, -0.06); t2.rotation.z = -1.2 * side; a.add(t2);
+    }
+    antler(1); antler(-1);
+
+    // pattes
+    var legs = [];
+    function leg(x, z) {
+      var p = new THREE.Group();
+      p.position.set(x, bodyY - 0.12, z);
+      g.add(p);
+      var l = box(0.13, 0.86, 0.13, 0x3f3024); l.position.set(0, -0.43, 0); p.add(l);
+      var hoof = box(0.15, 0.12, 0.17, 0x241a12); hoof.position.set(0, -0.84, 0); p.add(hoof);
+      legs.push(p);
+      return p;
+    }
+    var fl = leg(0.22, 0.55), fr = leg(-0.22, 0.55), bl = leg(0.22, -0.55), br = leg(-0.22, -0.55);
+
+    // ombre au sol
+    var shadow = new THREE.Mesh(
+      new THREE.CircleGeometry(0.72, 24),
+      new THREE.MeshBasicMaterial({ color: 0x0a1526, transparent: true, opacity: 0.32, fog: true })
+    );
+    shadow.rotation.x = -Math.PI / 2;
+    shadow.position.y = 0.04;
+    g.add(shadow);
+
+    scene.add(g);
+
+    // itinéraire le long de la berge, avec 2 arrêts pour boire
+    var wps = [
+      { x: -8, z: 12 }, { x: -5, z: 11, drink: true }, { x: -1, z: 12.5 },
+      { x: 3, z: 12.5 }, { x: 6, z: 11.5, drink: true }, { x: 7.5, z: 13.5 },
+      { x: 2, z: 14.5 }, { x: -4, z: 14 }
+    ];
+    var wi = 0;
+    var pos = { x: wps[0].x, z: wps[0].z };
+    var heading = 0, mode = "walk", drinkT = 0, drinkPitch = 0, walkPhase = 0;
+
+    function update(dt) {
+      var tgt = wps[wi];
+      if (mode === "walk") {
+        var dx = tgt.x - pos.x, dz = tgt.z - pos.z;
+        var dist = Math.sqrt(dx * dx + dz * dz);
+        if (dist < 0.25) {
+          if (tgt.drink) { mode = "drink"; drinkT = 0; }
+          wi = (wi + 1) % wps.length;
+        } else {
+          var sp = 1.15;
+          pos.x += dx / dist * sp * dt;
+          pos.z += dz / dist * sp * dt;
+          var want = Math.atan2(dx, dz);
+          var d = want - heading;
+          while (d > Math.PI) d -= Math.PI * 2;
+          while (d < -Math.PI) d += Math.PI * 2;
+          heading += d * Math.min(1, dt * 4);
+          walkPhase += dt * 7;
+        }
+      } else {
+        drinkT += dt;
+        var target = (drinkT > 0.8 && drinkT < 4.5) ? 1 : 0; // baisse puis relève
+        drinkPitch += (target - drinkPitch) * Math.min(1, dt * 2.5);
+        if (drinkT > 5.5 && drinkPitch < 0.05) mode = "walk";
+      }
+
+      g.position.set(pos.x, terrainY(pos.x, pos.z), pos.z);
+      g.rotation.y = heading;
+      neckPivot.rotation.x = drinkPitch * 1.3;
+
+      var swing = (mode === "walk") ? Math.sin(walkPhase) * 0.5 : 0;
+      fl.rotation.x = swing; br.rotation.x = swing;
+      fr.rotation.x = -swing; bl.rotation.x = -swing;
+      body.position.y = bodyY + (mode === "walk" ? Math.abs(Math.sin(walkPhase)) * 0.03 : 0);
+    }
+
+    return { update: update };
+  }
+
   /* ---------- Neige ---------- */
   function buildSnow() {
     var geo = new THREE.BufferGeometry();
@@ -472,6 +594,7 @@
 
     if (auroraMat) auroraMat.uniforms.uTime.value = t;
     if (lakeMat) lakeMat.uniforms.uTime.value = t;
+    if (caribou) caribou.update(dt);
 
     // neige
     if (snow) {
