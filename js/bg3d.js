@@ -186,7 +186,8 @@
     geo.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
     geo.computeVertexNormals();
 
-    var mat = new THREE.MeshBasicMaterial({ vertexColors: true, fog: true });
+    // DoubleSide : les pentes latérales vues de biais ne disparaissent plus
+    var mat = new THREE.MeshBasicMaterial({ vertexColors: true, fog: true, side: THREE.DoubleSide });
     var mesh = new THREE.Mesh(geo, mat);
     mesh.position.set(0, -2.5, o.z);
     scene.add(mesh);
