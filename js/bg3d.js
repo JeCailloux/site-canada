@@ -38,12 +38,16 @@
     camera.position.set(0, 4.2, 26);
 
     buildAurora();
-    // premier plan : berges très enneigées, creusées autour du lac
-    mountains = buildMountains({ amp: 3.4, z: -6, base: 0x1a2a47, snow: 1.0, depth: 44, lake: true });
+    // crête lointaine : silhouette enneigée qui remplit l'horizon
+    buildMountains({ amp: 8.5, z: -50, base: 0x24304e, snow: 1.0, depth: 26, width: 380, lake: false });
     // arrière-plan : sommets enneigés
-    mountainsFar = buildMountains({ amp: 5.2, z: -26, base: 0x14203c, snow: 0.9, depth: 34, lake: false });
+    mountainsFar = buildMountains({ amp: 5.6, z: -26, base: 0x1d2b49, snow: 1.0, depth: 34, width: 300, lake: false });
+    // premier plan : berges très enneigées, creusées autour du lac
+    mountains = buildMountains({ amp: 3.4, z: -6, base: 0x1a2a47, snow: 1.0, depth: 44, width: 220, lake: true });
     buildLake();
     buildMeadow();
+    buildForest({ amp: 5.6, zBase: -26, lake: false, count: 260, xSpread: 260, zMin: -14, zMax: 14, minH: 1.4, avoidLake: false, minS: 0.9, maxS: 2.4 });
+    buildForest({ amp: 3.4, zBase: -6, lake: true, count: 340, xSpread: 150, zMin: -16, zMax: 18, minH: 0.75, avoidLake: true, minS: 0.8, maxS: 2.6 });
     buildMoon();
     caribou = buildCaribou();
     buildSnow();
@@ -141,7 +145,7 @@
 
   /* ---------- Montagnes low-poly enneigées ---------- */
   function buildMountains(o) {
-    var w = 160, d = o.depth, segW = 90, segD = Math.round(d / 2);
+    var w = o.width || 160, d = o.depth, segW = Math.round(w / 1.8), segD = Math.round(d / 2);
     var geo = new THREE.PlaneGeometry(w, d, segW, segD);
     geo.rotateX(-Math.PI / 2);
 
@@ -412,6 +416,50 @@
     disc.position.set(-32, 37, -74);
     disc.lookAt(camera.position);
     scene.add(disc);
+  }
+
+  /* ---------- Forêt boréale : sapins enneigés (instances) ---------- */
+  function buildForest(o) {
+    var geo = new THREE.ConeGeometry(0.52, 1.5, 6);
+    geo.translate(0, 0.75, 0); // base à l'origine
+
+    // couleur par sommet : vert foncé en bas, neige au sommet
+    var pos = geo.attributes.position;
+    var colors = [];
+    var green = new THREE.Color(0x1f4230);
+    var snow = new THREE.Color(0xdce8f5);
+    for (var i = 0; i < pos.count; i++) {
+      var y = pos.getY(i);
+      var t = Math.max(0, Math.min((y - 0.55) / 0.9, 1));
+      var c = green.clone().lerp(snow, Math.pow(t, 1.4) * 0.85);
+      colors.push(c.r, c.g, c.b);
+    }
+    geo.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
+
+    var mat = new THREE.MeshBasicMaterial({ vertexColors: true, fog: true });
+    var trees = new THREE.InstancedMesh(geo, mat, o.count);
+    var dummy = new THREE.Object3D();
+
+    var placed = 0, guard = 0;
+    while (placed < o.count && guard++ < o.count * 6) {
+      var x = (Math.random() - 0.5) * o.xSpread;
+      var zz = o.zMin + Math.random() * (o.zMax - o.zMin);
+      var h = groundHeight(x, zz, o.amp, o.lake);
+      if (h < o.minH) continue; // pas dans l'eau ni trop bas
+      if (o.avoidLake) {
+        var ex = x / 12, ez = (zz - 10) / 8;
+        if (Math.sqrt(ex * ex + ez * ez) < 2.15) continue; // laisser la berge + le caribou
+      }
+      dummy.position.set(x, -2.5 + h, zz + o.zBase);
+      dummy.rotation.y = Math.random() * Math.PI;
+      var s = o.minS + Math.random() * (o.maxS - o.minS);
+      dummy.scale.set(s * (0.7 + Math.random() * 0.3), s, s * (0.7 + Math.random() * 0.3));
+      dummy.updateMatrix();
+      trees.setMatrixAt(placed++, dummy.matrix);
+    }
+    trees.count = placed;
+    trees.instanceMatrix.needsUpdate = true;
+    scene.add(trees);
   }
 
   /* ---------- Caribou low-poly qui se promène et boit au lac ---------- */
