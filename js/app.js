@@ -74,6 +74,7 @@
     modalPayer: null,
     modalParts: [],
     modalBenef: null,       // bénéficiaire du remboursement
+    modalDebts: {},         // dépenses cochées à rembourser {id: true}
     modalCat: "food",
     selectedLoginId: null
   };
@@ -780,6 +781,7 @@
       pb.innerHTML = '<span class="mini-dot" style="background:' + acc.color + '">' + esc(initials(acc.name)) + "</span>" + esc(acc.name);
       pb.addEventListener("click", function () {
         state.modalPayer = acc.id;
+        state.modalDebts = {};
         syncModalChoices();
       });
       payerBox.appendChild(pb);
@@ -796,6 +798,7 @@
       var bb = pb.cloneNode(true);
       bb.addEventListener("click", function () {
         state.modalBenef = acc.id;
+        state.modalDebts = {};
         syncModalChoices();
       });
       benefBox.appendChild(bb);
@@ -867,6 +870,90 @@
     $all("#exp-currency .seg-btn").forEach(function (b) {
       b.classList.toggle("active", b.dataset.cur === state.modalCurrency);
     });
+
+    $("#field-debts").hidden = !tr;
+    if (tr) renderDebtChoices();
+  }
+
+  // Dépenses que "qui rembourse" doit au bénéficiaire (bénéficiaire a payé, payeur concerné)
+  function debtCandidates() {
+    var payer = state.modalPayer, benef = state.modalBenef;
+    if (!payer || !benef || payer === benef) return [];
+    return state.data.expenses.filter(function (e) {
+      return !isTransfer(e) && e.payerId === benef &&
+        e.participants.indexOf(payer) >= 0;
+    }).map(function (e) {
+      var parts = e.participants.filter(function (p) { return member(p).name !== "?"; });
+      return { exp: e, share: parts.length ? toCad(e) / parts.length : 0 };
+    }).sort(function (a, b) { return (b.exp.date || "").localeCompare(a.exp.date || ""); });
+  }
+
+  function renderDebtChoices() {
+    var box = $("#exp-debts");
+    var hint = $("#debt-hint");
+    var cands = debtCandidates();
+
+    if (!state.modalPayer || !state.modalBenef) {
+      box.innerHTML = '<p class="debt-empty">Choisis qui rembourse et à qui pour voir les dépenses concernées.</p>';
+      hint.textContent = "";
+      return;
+    }
+    if (state.modalPayer === state.modalBenef) {
+      box.innerHTML = '<p class="debt-empty">On ne se rembourse pas soi-même.</p>';
+      hint.textContent = "";
+      return;
+    }
+    if (!cands.length) {
+      box.innerHTML = '<p class="debt-empty">Aucune dépense de ' + esc(member(state.modalBenef).name) + ' ne te concerne. Saisis le montant à la main.</p>';
+      hint.textContent = "";
+      return;
+    }
+
+    var check = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>';
+    box.innerHTML = cands.map(function (c) {
+      var e = c.exp;
+      var sel = state.modalDebts[e.id] ? " selected" : "";
+      var d = new Date(e.date + "T00:00:00");
+      var dl = isNaN(d) ? e.date : d.toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
+      return '<div class="debt-item' + sel + '" data-id="' + e.id + '">' +
+        '<span class="debt-check">' + check + "</span>" +
+        '<span class="debt-main"><p class="debt-title">' + esc(e.title) + "</p>" +
+        '<p class="debt-sub">' + esc(dl) + " · " + M(toCad(e)) + " ÷ " + e.participants.length + "</p></span>" +
+        '<span class="debt-share">' + M(c.share) + "</span></div>";
+    }).join("");
+
+    box.querySelectorAll(".debt-item").forEach(function (el) {
+      el.addEventListener("click", function () {
+        var id = el.dataset.id;
+        if (state.modalDebts[id]) delete state.modalDebts[id];
+        else state.modalDebts[id] = true;
+        applyDebtTotal();
+        renderDebtChoices();
+      });
+    });
+
+    applyDebtTotal(cands);
+  }
+
+  // Somme des parts cochées → remplit le montant (en CAD)
+  function applyDebtTotal(cands) {
+    cands = cands || debtCandidates();
+    var totalCad = 0, n = 0;
+    cands.forEach(function (c) {
+      if (state.modalDebts[c.exp.id]) { totalCad += c.share; n++; }
+    });
+    var hint = $("#debt-hint");
+    if (n > 0) {
+      state.modalCurrency = "CAD";
+      $("#exp-amount").value = (Math.round(totalCad * 100) / 100);
+      $all("#exp-currency .seg-btn").forEach(function (b) {
+        b.classList.toggle("active", b.dataset.cur === "CAD");
+      });
+      hint.textContent = n + " dépense(s) · total " + fmtCAD.format(totalCad)
+        + (displayCur === "EUR" ? " (" + fmtEUR.format(totalCad / state.data.eurToCad) + ")" : "");
+    } else {
+      hint.textContent = "Coche des dépenses pour calculer le montant, ou saisis-le à la main.";
+    }
   }
 
   function openModal(expense) {
@@ -883,6 +970,7 @@
     state.modalPayer = expense ? expense.payerId : state.user.id;
     state.modalParts = expense && !isTransfer(expense) ? expense.participants.slice() : CFG.accounts.map(function (a) { return a.id; });
     state.modalBenef = expense && isTransfer(expense) ? expense.participants[0] : null;
+    state.modalDebts = {};
     state.modalCat = expense && !isTransfer(expense) ? expense.category : "food";
     syncModalChoices();
 

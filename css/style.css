@@ -729,6 +729,41 @@ input[type="date"] { color-scheme: dark; }
 .btn-xs { padding: 7px 12px; min-height: 36px; font-size: 0.8rem; }
 .seg-type { margin-bottom: 18px; }
 
+/* Sélection des dépenses à rembourser */
+.debt-list { display: flex; flex-direction: column; gap: 8px; max-height: 220px; overflow-y: auto; }
+.debt-item {
+  display: grid;
+  grid-template-columns: 22px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--r-sm);
+  background: rgba(255, 255, 255, 0.03);
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+}
+.debt-item.selected {
+  border-color: var(--aurora);
+  background: rgba(52, 211, 153, 0.12);
+}
+.debt-check {
+  width: 20px; height: 20px;
+  border-radius: 6px;
+  border: 1.5px solid var(--border-strong);
+  display: grid; place-items: center;
+  color: #0B1120;
+}
+.debt-item.selected .debt-check { background: var(--aurora); border-color: var(--aurora); }
+.debt-check svg { width: 13px; height: 13px; opacity: 0; }
+.debt-item.selected .debt-check svg { opacity: 1; }
+.debt-main { min-width: 0; }
+.debt-title { margin: 0; font-weight: 700; font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.debt-sub { margin: 1px 0 0; color: var(--text-dim); font-size: 0.76rem; }
+.debt-share { font-variant-numeric: tabular-nums; font-weight: 800; font-size: 0.9rem; color: var(--aurora); }
+.debt-hint { margin: 10px 0 0; font-size: 0.82rem; color: var(--text-dim); font-weight: 600; }
+.debt-empty { color: var(--text-dim); font-size: 0.86rem; padding: 8px 2px; }
+
 /* ---------- Stats ---------- */
 .stat-hero {
   display: flex;
