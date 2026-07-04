@@ -947,6 +947,86 @@
     });
   }
 
+  /* ================= Export Excel ================= */
+
+  function exportExcel() {
+    if (typeof XLSX === "undefined") { toast("Librairie Excel pas encore chargée, réessaie", true); return; }
+    var me = state.user.id;
+    var rate = state.data.eurToCad;
+
+    var sorted = state.data.expenses.slice().sort(function (a, b) {
+      return (a.date + (a.createdAt || "")).localeCompare(b.date + (b.createdAt || ""));
+    });
+
+    // Feuille 1 : lignes de dépenses / remboursements
+    var rows = sorted.map(function (e) {
+      var cad = toCad(e);
+      var tr = isTransfer(e);
+      var parts = e.participants.filter(function (p) { return member(p).name !== "?"; });
+      var paid = e.payerId === me ? cad : 0;
+      var share = (parts.indexOf(me) >= 0 && parts.length) ? cad / parts.length : 0;
+      var impact = paid - share; // + = on te doit, - = tu dois
+      return {
+        "Date": e.date,
+        "Type": tr ? "Remboursement" : "Dépense",
+        "Titre": e.title,
+        "Catégorie": tr ? "" : category(e.category).name,
+        "Payé par": member(e.payerId).name,
+        "Pour / À qui": tr ? member(e.participants[0]).name
+          : parts.map(function (p) { return member(p).name; }).join(", "),
+        "Montant saisi": Math.round(e.amount * 100) / 100,
+        "Devise": e.currency,
+        "Montant (CAD)": Math.round(cad * 100) / 100,
+        "Montant (EUR)": Math.round(cad / rate * 100) / 100,
+        "Ton impact (CAD)": Math.round(impact * 100) / 100
+      };
+    });
+    var totalSpent = spentOnly().reduce(function (s, e) { return s + toCad(e); }, 0);
+    rows.push({});
+    rows.push({
+      "Type": "TOTAL dépenses",
+      "Montant (CAD)": Math.round(totalSpent * 100) / 100,
+      "Montant (EUR)": Math.round(totalSpent / rate * 100) / 100
+    });
+
+    var ws1 = XLSX.utils.json_to_sheet(rows);
+    ws1["!cols"] = [
+      { wch: 11 }, { wch: 14 }, { wch: 26 }, { wch: 12 }, { wch: 11 },
+      { wch: 24 }, { wch: 13 }, { wch: 7 }, { wch: 14 }, { wch: 14 }, { wch: 16 }
+    ];
+
+    // Feuille 2 : soldes du crew + remboursements conseillés
+    var balances = computeBalances();
+    var soldeRows = balances.map(function (b) {
+      return {
+        "Membre": member(b.id).name,
+        "A payé (CAD)": Math.round(b.paid * 100) / 100,
+        "Sa part (CAD)": Math.round(b.share * 100) / 100,
+        "Solde (CAD)": Math.round(b.balance * 100) / 100,
+        "Statut": Math.abs(b.balance) < 0.005 ? "à jour"
+          : (b.balance > 0 ? "on lui doit" : "doit rembourser")
+      };
+    });
+    soldeRows.push({});
+    soldeRows.push({ "Membre": "Remboursements conseillés :" });
+    computeSettlements(balances).forEach(function (s) {
+      soldeRows.push({
+        "Membre": member(s.from).name + " → " + member(s.to).name,
+        "Solde (CAD)": Math.round(s.amount * 100) / 100
+      });
+    });
+    var ws2 = XLSX.utils.json_to_sheet(soldeRows);
+    ws2["!cols"] = [{ wch: 26 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 16 }];
+
+    var wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws1, "Dépenses & remb.");
+    XLSX.utils.book_append_sheet(wb, ws2, "Soldes");
+
+    var trip = (CFG.tripName || "voyage").replace(/[^a-z0-9]+/gi, "-").toLowerCase();
+    XLSX.writeFile(wb, "caribou-" + trip + "-" + todayISO() + ".xlsx");
+    toast("Fichier Excel téléchargé");
+  }
+
   /* ================= App ================= */
 
   function showApp() {
@@ -1078,6 +1158,7 @@
         toast("Taux mis à jour : 1 € = " + v + " $ CAD");
       }
     });
+    $("#export-xlsx-btn").addEventListener("click", exportExcel);
     $("#reset-btn").addEventListener("click", function () {
       askConfirm({
         title: "Tout effacer ?",
