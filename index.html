@@ -256,6 +256,11 @@
         </button>
       </div>
       <form id="expense-form">
+        <div class="seg seg-type" id="exp-type">
+          <button type="button" class="seg-btn active" data-type="expense">Dépense</button>
+          <button type="button" class="seg-btn" data-type="transfer">Remboursement</button>
+        </div>
+
         <label class="field">
           <span class="field-label">Titre</span>
           <input type="text" id="exp-title" placeholder="Poutine chez Ashton" required maxlength="60">
@@ -276,16 +281,21 @@
         </div>
 
         <label class="field">
-          <span class="field-label">Payé par</span>
+          <span class="field-label" id="exp-payer-label">Payé par</span>
           <div class="payer-grid" id="exp-payer"></div>
         </label>
 
-        <label class="field">
+        <label class="field" id="field-participants">
           <span class="field-label">Pour qui</span>
           <div class="part-grid" id="exp-participants"></div>
         </label>
 
-        <label class="field">
+        <label class="field" id="field-beneficiary" hidden>
+          <span class="field-label">À qui</span>
+          <div class="part-grid" id="exp-beneficiary"></div>
+        </label>
+
+        <label class="field" id="field-category">
           <span class="field-label">Catégorie</span>
           <div class="cat-grid" id="exp-category"></div>
         </label>

@@ -45,8 +45,10 @@
     data: null,          // { expenses: [], eurToCad: n }
     editingId: null,     // dépense en cours d'édition
     modalCurrency: "CAD",
+    modalType: "expense",   // "expense" | "transfer"
     modalPayer: null,
     modalParts: [],
+    modalBenef: null,       // bénéficiaire du remboursement
     modalCat: "food",
     selectedLoginId: null
   };
@@ -90,6 +92,15 @@
 
   function toCad(exp) {
     return exp.currency === "EUR" ? exp.amount * state.data.eurToCad : exp.amount;
+  }
+
+  function isTransfer(exp) {
+    return exp.type === "transfer";
+  }
+
+  // vraies dépenses uniquement (les remboursements ne comptent pas dans les stats)
+  function spentOnly() {
+    return state.data.expenses.filter(function (e) { return !isTransfer(e); });
   }
 
   function todayISO() {
@@ -393,10 +404,11 @@
   }
 
   function renderStats() {
-    var total = state.data.expenses.reduce(function (s, e) { return s + toCad(e); }, 0);
+    var spent = spentOnly();
+    var total = spent.reduce(function (s, e) { return s + toCad(e); }, 0);
     $("#stat-total").textContent = fmtCAD.format(total);
     $("#stat-total-eur").textContent = "≈ " + fmtEUR.format(total / state.data.eurToCad);
-    $("#stat-count").textContent = String(state.data.expenses.length);
+    $("#stat-count").textContent = String(spent.length);
 
     var balances = computeBalances();
     var mine = balances.filter(function (b) { return b.id === state.user.id; })[0];
@@ -448,7 +460,7 @@
   function renderCategoryBars() {
     var box = $("#category-bars");
     var totals = {};
-    state.data.expenses.forEach(function (e) {
+    spentOnly().forEach(function (e) {
       totals[e.category] = (totals[e.category] || 0) + toCad(e);
     });
     var entries = Object.keys(totals).map(function (k) { return { cat: category(k), total: totals[k] }; });
@@ -473,7 +485,7 @@
 
   function categoryTotals() {
     var totals = {};
-    state.data.expenses.forEach(function (e) {
+    spentOnly().forEach(function (e) {
       totals[e.category] = (totals[e.category] || 0) + toCad(e);
     });
     return Object.keys(totals)
@@ -489,7 +501,7 @@
   }
 
   function renderStatsTab() {
-    var expenses = state.data.expenses;
+    var expenses = spentOnly(); // les remboursements ne sont pas de l'argent perdu
     var total = expenses.reduce(function (s, e) { return s + toCad(e); }, 0);
     var perHead = total / CFG.accounts.length;
 
@@ -633,18 +645,30 @@
       recordCard("#34D399", icoAvg, "Rythme de perte", esc(fmtCAD.format(total / nbDays)) + " / jour", "sur " + nbDays + " jour" + (nbDays > 1 ? "s" : "") + " de dépenses");
   }
 
+  var TRANSFER_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16 3 4 4-4 4"/><path d="M20 7H4"/><path d="m8 21-4-4 4-4"/><path d="M4 17h16"/></svg>';
+
   function expenseRow(exp) {
     var m = member(exp.payerId);
-    var cat = category(exp.category);
     var cad = toCad(exp);
     var eurNote = exp.currency === "EUR"
       ? fmtEUR.format(exp.amount) + " saisis"
       : "≈ " + fmtEUR.format(cad / state.data.eurToCad);
-    var nParts = exp.participants.length;
+
+    var icon, meta;
+    if (isTransfer(exp)) {
+      var benef = member(exp.participants[0]);
+      icon = '<span class="exp-icon transfer">' + TRANSFER_ICON + "</span>";
+      meta = avatarDot(m, "mini-dot") + " " + esc(m.name) + " a remboursé " + esc(benef.name);
+    } else {
+      var cat = category(exp.category);
+      icon = '<span class="exp-icon">' + cat.icon + "</span>";
+      var nParts = exp.participants.length;
+      meta = avatarDot(m, "mini-dot") + " " + esc(m.name) + " a payé · pour " + nParts + (nParts > 1 ? " personnes" : " personne");
+    }
     return '<li class="expense-item" data-id="' + exp.id + '" tabindex="0" role="button" aria-label="Modifier ' + esc(exp.title) + '">' +
-      '<span class="exp-icon">' + cat.icon + "</span>" +
+      icon +
       '<span class="exp-main"><p class="exp-title">' + esc(exp.title) + "</p>" +
-      '<p class="exp-meta">' + avatarDot(m, "mini-dot") + " " + esc(m.name) + " a payé · pour " + nParts + (nParts > 1 ? " personnes" : " personne") + "</p></span>" +
+      '<p class="exp-meta">' + meta + "</p></span>" +
       '<span class="exp-amount"><span class="cad">' + fmtCAD.format(cad) + '</span><span class="eur">' + eurNote + "</span></span></li>";
   }
 
@@ -704,9 +728,11 @@
     var arrow = '<span class="arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg></span>';
     list.innerHTML = settlements.map(function (s) {
       var from = member(s.from), to = member(s.to);
+      var amt = Math.round(s.amount * 100) / 100;
       return '<li class="settlement-item">' + avatarDot(from) + "<span>" + esc(from.name) + "</span>" +
         arrow + avatarDot(to) + "<span>" + esc(to.name) + "</span>" +
-        '<span class="amount">' + fmtCAD.format(s.amount) + "</span></li>";
+        '<span class="amount">' + fmtCAD.format(amt) + "</span>" +
+        '<button type="button" class="btn-ghost btn-xs settle-btn" data-from="' + from.id + '" data-to="' + to.id + '" data-amount="' + amt + '">Marquer payé</button></li>';
     }).join("");
   }
 
@@ -715,8 +741,10 @@
   function buildModalChoices() {
     var payerBox = $("#exp-payer");
     var partBox = $("#exp-participants");
+    var benefBox = $("#exp-beneficiary");
     payerBox.innerHTML = "";
     partBox.innerHTML = "";
+    benefBox.innerHTML = "";
 
     CFG.accounts.forEach(function (acc) {
       var pb = document.createElement("button");
@@ -739,6 +767,21 @@
         syncModalChoices();
       });
       partBox.appendChild(cb);
+
+      var bb = pb.cloneNode(true);
+      bb.addEventListener("click", function () {
+        state.modalBenef = acc.id;
+        syncModalChoices();
+      });
+      benefBox.appendChild(bb);
+    });
+
+    $all("#exp-type .seg-btn").forEach(function (b) {
+      b.addEventListener("click", function () {
+        state.modalType = b.dataset.type;
+        $("#modal-title").textContent = modalTitleText();
+        syncModalChoices();
+      });
     });
 
     var catBox = $("#exp-category");
@@ -764,12 +807,34 @@
     });
   }
 
+  function modalTitleText() {
+    if (state.modalType === "transfer") {
+      return state.editingId ? "Modifier le remboursement" : "Nouveau remboursement";
+    }
+    return state.editingId ? "Modifier la dépense" : "Nouvelle dépense";
+  }
+
   function syncModalChoices() {
+    var tr = state.modalType === "transfer";
+
+    $all("#exp-type .seg-btn").forEach(function (b) {
+      b.classList.toggle("active", b.dataset.type === state.modalType);
+    });
+    $("#field-participants").hidden = tr;
+    $("#field-category").hidden = tr;
+    $("#field-beneficiary").hidden = !tr;
+    $("#exp-payer-label").textContent = tr ? "Qui rembourse" : "Payé par";
+    $("#exp-title").placeholder = tr ? "Remboursement (facultatif)" : "Poutine chez Ashton";
+    $("#exp-title").required = !tr;
+
     $all("#exp-payer .chip-btn").forEach(function (b) {
       b.classList.toggle("selected", b.dataset.id === state.modalPayer);
     });
     $all("#exp-participants .chip-btn").forEach(function (b) {
       b.classList.toggle("selected", state.modalParts.indexOf(b.dataset.id) >= 0);
+    });
+    $all("#exp-beneficiary .chip-btn").forEach(function (b) {
+      b.classList.toggle("selected", b.dataset.id === state.modalBenef);
     });
     $all("#exp-category .cat-btn").forEach(function (b) {
       b.classList.toggle("selected", b.dataset.id === state.modalCat);
@@ -781,7 +846,8 @@
 
   function openModal(expense) {
     state.editingId = expense ? expense.id : null;
-    $("#modal-title").textContent = expense ? "Modifier la dépense" : "Nouvelle dépense";
+    state.modalType = expense && isTransfer(expense) ? "transfer" : "expense";
+    $("#modal-title").textContent = modalTitleText();
     $("#exp-delete").hidden = !expense;
     $("#exp-error").hidden = true;
 
@@ -790,8 +856,9 @@
     $("#exp-date").value = expense ? expense.date : todayISO();
     state.modalCurrency = expense ? expense.currency : "CAD";
     state.modalPayer = expense ? expense.payerId : state.user.id;
-    state.modalParts = expense ? expense.participants.slice() : CFG.accounts.map(function (a) { return a.id; });
-    state.modalCat = expense ? expense.category : "food";
+    state.modalParts = expense && !isTransfer(expense) ? expense.participants.slice() : CFG.accounts.map(function (a) { return a.id; });
+    state.modalBenef = expense && isTransfer(expense) ? expense.participants[0] : null;
+    state.modalCat = expense && !isTransfer(expense) ? expense.category : "food";
     syncModalChoices();
 
     $("#expense-modal").hidden = false;
@@ -808,14 +875,17 @@
   function submitExpense(e) {
     e.preventDefault();
     var err = $("#exp-error");
+    var isTr = state.modalType === "transfer";
     var title = $("#exp-title").value.trim();
     var amount = parseFloat($("#exp-amount").value);
     var date = $("#exp-date").value;
 
-    if (!title) { err.textContent = "Donne un titre à la dépense."; err.hidden = false; return; }
+    if (!isTr && !title) { err.textContent = "Donne un titre à la dépense."; err.hidden = false; return; }
     if (!(amount > 0)) { err.textContent = "Le montant doit être supérieur à 0."; err.hidden = false; return; }
-    if (!state.modalPayer) { err.textContent = "Choisis qui a payé."; err.hidden = false; return; }
-    if (!state.modalParts.length) { err.textContent = "Sélectionne au moins un participant."; err.hidden = false; return; }
+    if (!state.modalPayer) { err.textContent = isTr ? "Choisis qui rembourse." : "Choisis qui a payé."; err.hidden = false; return; }
+    if (!isTr && !state.modalParts.length) { err.textContent = "Sélectionne au moins un participant."; err.hidden = false; return; }
+    if (isTr && !state.modalBenef) { err.textContent = "Choisis qui reçoit l'argent."; err.hidden = false; return; }
+    if (isTr && state.modalBenef === state.modalPayer) { err.textContent = "On ne se rembourse pas soi-même !"; err.hidden = false; return; }
     if (!date) { err.textContent = "Choisis une date."; err.hidden = false; return; }
     err.hidden = true;
 
@@ -825,16 +895,17 @@
       : null;
     var payload = {
       id: editing ? state.editingId : uid(),
-      title: title,
+      title: isTr ? (title || "Remboursement") : title,
       amount: Math.round(amount * 100) / 100,
       currency: state.modalCurrency,
       payerId: state.modalPayer,
-      participants: state.modalParts.slice(),
-      category: state.modalCat,
+      participants: isTr ? [state.modalBenef] : state.modalParts.slice(),
+      category: isTr ? "other" : state.modalCat,
       date: date,
       createdBy: existing ? existing.createdBy : state.user.id,
       createdAt: existing ? existing.createdAt : new Date().toISOString()
     };
+    if (isTr) payload.type = "transfer";
 
     if (cloud) {
       cloud.expRef.doc(payload.id).set(payload); // le snapshot met l'UI à jour
@@ -847,7 +918,9 @@
       saveData();
       renderAll();
     }
-    toast(editing ? "Dépense modifiée" : "Dépense ajoutée");
+    toast(isTr
+      ? (editing ? "Remboursement modifié" : "Remboursement enregistré")
+      : (editing ? "Dépense modifiée" : "Dépense ajoutée"));
     closeModal();
   }
 
@@ -947,6 +1020,44 @@
       if (!item || !item.dataset.id) return;
       var exp = state.data.expenses.filter(function (x) { return x.id === item.dataset.id; })[0];
       if (exp) openModal(exp);
+    });
+
+    // "Marquer payé" sur un remboursement conseillé → crée le remboursement
+    document.addEventListener("click", function (e) {
+      var btn = e.target.closest ? e.target.closest(".settle-btn") : null;
+      if (!btn) return;
+      var from = member(btn.dataset.from), to = member(btn.dataset.to);
+      var amt = parseFloat(btn.dataset.amount);
+      if (!(amt > 0)) return;
+      askConfirm({
+        title: "Remboursement fait ?",
+        message: from.name + " a bien envoyé " + fmtCAD.format(amt) + " à " + to.name + " ?",
+        confirmLabel: "Oui, c'est payé",
+        danger: false
+      }).then(function (yes) {
+        if (!yes) return;
+        var payload = {
+          id: uid(),
+          title: "Remboursement",
+          amount: amt,
+          currency: "CAD",
+          payerId: from.id,
+          participants: [to.id],
+          category: "other",
+          date: todayISO(),
+          type: "transfer",
+          createdBy: state.user.id,
+          createdAt: new Date().toISOString()
+        };
+        if (cloud) {
+          cloud.expRef.doc(payload.id).set(payload);
+        } else {
+          state.data.expenses.push(payload);
+          saveData();
+          renderAll();
+        }
+        toast("Remboursement enregistré");
+      });
     });
     document.addEventListener("keydown", function (e) {
       if (e.key !== "Enter") return;

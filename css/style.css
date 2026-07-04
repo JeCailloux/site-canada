@@ -600,6 +600,10 @@ input[type="date"] { color-scheme: dark; }
   background: rgba(167, 139, 250, 0.12);
   color: var(--violet);
 }
+.exp-icon.transfer {
+  background: rgba(52, 211, 153, 0.12);
+  color: var(--aurora);
+}
 .exp-icon svg { width: 20px; height: 20px; }
 .exp-main { min-width: 0; }
 .exp-title {
@@ -697,6 +701,8 @@ input[type="date"] { color-scheme: dark; }
   color: var(--gold-soft);
   font-size: 1.05rem;
 }
+.btn-xs { padding: 7px 12px; min-height: 36px; font-size: 0.8rem; }
+.seg-type { margin-bottom: 18px; }
 
 /* ---------- Stats ---------- */
 .stat-hero {
