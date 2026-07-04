@@ -38,7 +38,32 @@
   var fmtCAD = new Intl.NumberFormat("fr-CA", { style: "currency", currency: "CAD" });
   var fmtCAD0 = new Intl.NumberFormat("fr-CA", { style: "currency", currency: "CAD", maximumFractionDigits: 0 });
   var fmtEUR = new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" });
+  var fmtEUR0 = new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 });
   var fmtDate = new Intl.DateTimeFormat("fr-FR", { weekday: "long", day: "numeric", month: "long" });
+
+  var LS_CUR = "caribou_display_cur";
+  var displayCur = (localStorage.getItem(LS_CUR) === "EUR") ? "EUR" : "CAD";
+
+  // Montant fourni en CAD → formaté dans la devise d'affichage choisie
+  function M(cad) {
+    return displayCur === "EUR" ? fmtEUR.format(cad / state.data.eurToCad) : fmtCAD.format(cad);
+  }
+  function M0(cad) {
+    return displayCur === "EUR" ? fmtEUR0.format(cad / state.data.eurToCad) : fmtCAD0.format(cad);
+  }
+  // même montant dans l'autre devise (note secondaire)
+  function MOther(cad) {
+    return displayCur === "EUR" ? fmtCAD.format(cad) : fmtEUR.format(cad / state.data.eurToCad);
+  }
+  function syncCurButtons() {
+    $all(".cur-btn").forEach(function (b) { b.classList.toggle("active", b.dataset.cur === displayCur); });
+  }
+  function setDisplayCur(cur) {
+    displayCur = cur === "EUR" ? "EUR" : "CAD";
+    localStorage.setItem(LS_CUR, displayCur);
+    syncCurButtons();
+    if (state.user) renderAll();
+  }
 
   var state = {
     user: null,          // compte connecté
@@ -406,8 +431,8 @@
   function renderStats() {
     var spent = spentOnly();
     var total = spent.reduce(function (s, e) { return s + toCad(e); }, 0);
-    $("#stat-total").textContent = fmtCAD.format(total);
-    $("#stat-total-eur").textContent = "≈ " + fmtEUR.format(total / state.data.eurToCad);
+    $("#stat-total").textContent = M(total);
+    $("#stat-total-eur").textContent = "≈ " + MOther(total);
     $("#stat-count").textContent = String(spent.length);
 
     var balances = computeBalances();
@@ -416,14 +441,14 @@
     var hint = $("#stat-balance-hint");
     el.classList.remove("pos", "neg");
     if (!mine || Math.abs(mine.balance) < 0.005) {
-      el.textContent = fmtCAD.format(0);
+      el.textContent = M(0);
       hint.textContent = "Tu es à jour";
     } else if (mine.balance > 0) {
-      el.textContent = "+" + fmtCAD.format(mine.balance);
+      el.textContent = "+" + M(mine.balance);
       el.classList.add("pos");
       hint.textContent = "On te doit de l'argent";
     } else {
-      el.textContent = fmtCAD.format(mine.balance);
+      el.textContent = M(mine.balance);
       el.classList.add("neg");
       hint.textContent = "Tu dois rembourser";
     }
@@ -450,7 +475,7 @@
       var fill = "";
       if (cls === "pos") fill = '<span class="bbar-fill pos" style="left:50%;width:' + pct + '%"></span>';
       else if (cls === "neg") fill = '<span class="bbar-fill neg" style="left:' + (50 - pct) + '%;width:' + pct + '%"></span>';
-      var amount = (b.balance > 0.005 ? "+" : "") + fmtCAD.format(b.balance);
+      var amount = (b.balance > 0.005 ? "+" : "") + M(b.balance);
       return '<div class="bbar">' + avatarDot(m) +
         '<span class="bbar-track">' + fill + "</span>" +
         '<span class="bbar-amount ' + cls + '">' + amount + "</span></div>";
@@ -475,7 +500,7 @@
       var color = CAT_COLORS[e.cat.id] || "#94A3B8";
       return '<div class="cbar">' + e.cat.icon +
         '<span class="cbar-name">' + esc(e.cat.name) + "</span>" +
-        '<span class="cbar-amount">' + fmtCAD.format(e.total) + "</span>" +
+        '<span class="cbar-amount">' + M(e.total) + "</span>" +
         '<span class="cbar-track"><span class="cbar-fill" style="width:' + (e.total / max * 100) + '%;background:' + color + '"></span></span>' +
         "</div>";
     }).join("");
@@ -506,9 +531,9 @@
     var perHead = total / CFG.accounts.length;
 
     // --- Héro ---
-    $("#stats-hero-total").textContent = fmtCAD.format(total);
+    $("#stats-hero-total").textContent = M(total);
     $("#stats-hero-foot").textContent = expenses.length
-      ? "≈ " + fmtEUR.format(total / state.data.eurToCad) + " · soit " + fmtCAD.format(perHead) + " par tête. Ces dollars sont partis vivre leur vie."
+      ? "≈ " + MOther(total) + " · soit " + M(perHead) + " par tête. Ces dollars sont partis vivre leur vie."
       : "Rien de perdu pour l'instant. Ça viendra.";
 
     // --- Donut par catégorie ---
@@ -523,7 +548,7 @@
       var svg = "";
       if (entries.length === 1) {
         var only = entries[0];
-        svg += '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="none" stroke="' + (CAT_COLORS[only.cat.id] || "#94A3B8") + '" stroke-width="24"><title>' + esc(only.cat.name) + " — " + fmtCAD.format(only.total) + " (100%)</title></circle>";
+        svg += '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="none" stroke="' + (CAT_COLORS[only.cat.id] || "#94A3B8") + '" stroke-width="24"><title>' + esc(only.cat.name) + " — " + M(only.total) + " (100%)</title></circle>";
       } else {
         var angle = -Math.PI / 2;
         entries.forEach(function (e) {
@@ -534,11 +559,11 @@
           if (a1 <= a0) a1 = a0 + 0.01;
           var color = CAT_COLORS[e.cat.id] || "#94A3B8";
           svg += '<path d="' + arcPath(cx, cy, r, a0, a1) + '" fill="none" stroke="' + color + '" stroke-width="24" stroke-linecap="butt"><title>' +
-            esc(e.cat.name) + " — " + fmtCAD.format(e.total) + " (" + Math.round(frac * 100) + "%)</title></path>";
+            esc(e.cat.name) + " — " + M(e.total) + " (" + Math.round(frac * 100) + "%)</title></path>";
           angle += span;
         });
       }
-      svg += '<text x="' + cx + '" y="' + (cy - 2) + '" text-anchor="middle" class="donut-center-value">' + esc(fmtCAD0.format(total)) + "</text>";
+      svg += '<text x="' + cx + '" y="' + (cy - 2) + '" text-anchor="middle" class="donut-center-value">' + esc(M0(total)) + "</text>";
       svg += '<text x="' + cx + '" y="' + (cy + 18) + '" text-anchor="middle" class="donut-center-label">envolés</text>';
       donut.innerHTML = svg;
 
@@ -547,7 +572,7 @@
         return '<li><span class="swatch" style="background:' + color + '"></span>' +
           "<span>" + esc(e.cat.name) + "</span>" +
           '<span class="pct">' + Math.round(e.total / total * 100) + "%</span>" +
-          '<span class="amt">' + fmtCAD.format(e.total) + "</span></li>";
+          '<span class="amt">' + M(e.total) + "</span></li>";
       }).join("");
     }
 
@@ -582,7 +607,7 @@
       var dots = points.map(function (p, i) {
         var fmtDay = new Date(p.date + "T00:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
         return '<circle cx="' + px(i).toFixed(1) + '" cy="' + py(p.value).toFixed(1) + '" r="3.4" fill="#F59E0B" stroke="#0B1120" stroke-width="1.5"><title>' +
-          fmtDay + " — " + fmtCAD.format(p.value) + " au total</title></circle>";
+          fmtDay + " — " + M(p.value) + " au total</title></circle>";
       }).join("");
 
       tl.innerHTML =
@@ -593,7 +618,7 @@
         '<path d="' + area + '" fill="url(#tl-grad)"/>' +
         '<path d="' + line + '" fill="none" stroke="#F59E0B" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>' +
         dots +
-        '<text x="' + padX + '" y="11" fill="#94A3B8" font-size="10" font-weight="600">' + esc(fmtCAD0.format(maxV)) + "</text>";
+        '<text x="' + padX + '" y="11" fill="#94A3B8" font-size="10" font-weight="600">' + esc(M0(maxV)) + "</text>";
 
       var optsDate = { day: "numeric", month: "short" };
       $("#tl-start").textContent = new Date(days[0] + "T00:00:00").toLocaleDateString("fr-FR", optsDate);
@@ -612,7 +637,7 @@
       return '<div class="podium-row"><span class="podium-rank">' + (i + 1) + "</span>" +
         avatarDot(r.m) +
         '<span class="podium-track"><span class="podium-fill" style="width:' + (r.paid / maxPaid * 100) + "%;background:" + r.m.color + '"></span></span>' +
-        '<span class="podium-amt">' + fmtCAD.format(r.paid) + "</span></div>";
+        '<span class="podium-amt">' + M(r.paid) + "</span></div>";
     }).join("");
 
     // --- Records ---
@@ -639,10 +664,10 @@
 
     var worstDayLabel = new Date(worstDay + "T00:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "long" });
     records.innerHTML =
-      recordCard("#FB7185", icoBolt, "Plus grosse dépense", esc(fmtCAD.format(toCad(biggest))), esc(biggest.title) + " · payé par " + esc(member(biggest.payerId).name)) +
-      recordCard("#38BDF8", icoCal, "Journée la plus chère", esc(fmtCAD.format(byDay2[worstDay])), esc(worstDayLabel)) +
-      recordCard("#F59E0B", icoCrown, "Flambeur n°1", esc(topPayer.m.name), "a avancé " + esc(fmtCAD.format(topPayer.paid))) +
-      recordCard("#34D399", icoAvg, "Rythme de perte", esc(fmtCAD.format(total / nbDays)) + " / jour", "sur " + nbDays + " jour" + (nbDays > 1 ? "s" : "") + " de dépenses");
+      recordCard("#FB7185", icoBolt, "Plus grosse dépense", esc(M(toCad(biggest))), esc(biggest.title) + " · payé par " + esc(member(biggest.payerId).name)) +
+      recordCard("#38BDF8", icoCal, "Journée la plus chère", esc(M(byDay2[worstDay])), esc(worstDayLabel)) +
+      recordCard("#F59E0B", icoCrown, "Flambeur n°1", esc(topPayer.m.name), "a avancé " + esc(M(topPayer.paid))) +
+      recordCard("#34D399", icoAvg, "Rythme de perte", esc(M(total / nbDays)) + " / jour", "sur " + nbDays + " jour" + (nbDays > 1 ? "s" : "") + " de dépenses");
   }
 
   var TRANSFER_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16 3 4 4-4 4"/><path d="M20 7H4"/><path d="m8 21-4-4 4-4"/><path d="M4 17h16"/></svg>';
@@ -650,9 +675,9 @@
   function expenseRow(exp) {
     var m = member(exp.payerId);
     var cad = toCad(exp);
-    var eurNote = exp.currency === "EUR"
-      ? fmtEUR.format(exp.amount) + " saisis"
-      : "≈ " + fmtEUR.format(cad / state.data.eurToCad);
+    // note secondaire : montant réellement saisi (dans sa devise d'origine)
+    var origFmt = exp.currency === "EUR" ? fmtEUR.format(exp.amount) : fmtCAD.format(exp.amount);
+    var eurNote = origFmt + " saisi";
 
     var icon, meta;
     if (isTransfer(exp)) {
@@ -669,7 +694,7 @@
       icon +
       '<span class="exp-main"><p class="exp-title">' + esc(exp.title) + "</p>" +
       '<p class="exp-meta">' + meta + "</p></span>" +
-      '<span class="exp-amount"><span class="cad">' + fmtCAD.format(cad) + '</span><span class="eur">' + eurNote + "</span></span></li>";
+      '<span class="exp-amount"><span class="cad">' + M(cad) + '</span><span class="eur">' + eurNote + "</span></span></li>";
   }
 
   function renderRecent() {
@@ -713,10 +738,10 @@
     cards.innerHTML = balances.map(function (b) {
       var m = member(b.id);
       var cls = Math.abs(b.balance) < 0.005 ? "zero" : (b.balance > 0 ? "pos" : "neg");
-      var val = (b.balance > 0.005 ? "+" : "") + fmtCAD.format(b.balance);
+      var val = (b.balance > 0.005 ? "+" : "") + M(b.balance);
       return '<div class="balance-card">' + avatarDot(m) +
         '<div><p class="who">' + esc(m.name) + '</p><p class="how ' + cls + '">' + val + "</p>" +
-        '<p class="sub">a payé ' + fmtCAD.format(b.paid) + "</p></div></div>";
+        '<p class="sub">a payé ' + M(b.paid) + "</p></div></div>";
     }).join("");
 
     var list = $("#settlement-list");
@@ -731,7 +756,7 @@
       var amt = Math.round(s.amount * 100) / 100;
       return '<li class="settlement-item">' + avatarDot(from) + "<span>" + esc(from.name) + "</span>" +
         arrow + avatarDot(to) + "<span>" + esc(to.name) + "</span>" +
-        '<span class="amount">' + fmtCAD.format(amt) + "</span>" +
+        '<span class="amount">' + M(amt) + "</span>" +
         '<button type="button" class="btn-ghost btn-xs settle-btn" data-from="' + from.id + '" data-to="' + to.id + '" data-amount="' + amt + '">Marquer payé</button></li>';
     }).join("");
   }
@@ -1045,6 +1070,7 @@
     $("#trip-chip").textContent = CFG.tripName;
     $("#user-chip").innerHTML = avatarDot(state.user) + "<span>" + esc(state.user.name) + "</span>";
     $("#rate-input").value = state.data.eurToCad;
+    syncCurButtons();
 
     renderAll();
 
@@ -1062,6 +1088,10 @@
     });
     $all("[data-goto]").forEach(function (b) {
       b.addEventListener("click", function () { gotoTab(b.dataset.goto); });
+    });
+
+    $all("#cur-switch .cur-btn").forEach(function (b) {
+      b.addEventListener("click", function () { setDisplayCur(b.dataset.cur); });
     });
 
     $("#logout-btn").addEventListener("click", function () {
@@ -1111,7 +1141,7 @@
       if (!(amt > 0)) return;
       askConfirm({
         title: "Remboursement fait ?",
-        message: from.name + " a bien envoyé " + fmtCAD.format(amt) + " à " + to.name + " ?",
+        message: from.name + " a bien envoyé " + M(amt) + " à " + to.name + " ?",
         confirmLabel: "Oui, c'est payé",
         danger: false
       }).then(function (yes) {
