@@ -79,7 +79,8 @@
     selectedLoginId: null
   };
 
-  var cloud = null; // synchro Firestore (null = mode 100% local)
+  var cloud = null;       // synchro Firestore (null = mode 100% local)
+  var defisCloud = false; // true quand les règles couvrent challenges + wheel
 
   /* ================= Utilitaires ================= */
 
@@ -187,6 +188,8 @@
       raw = { expenses: [], eurToCad: CFG.eurToCadDefault };
     }
     if (typeof raw.eurToCad !== "number" || !(raw.eurToCad > 0)) raw.eurToCad = CFG.eurToCadDefault;
+    if (!Array.isArray(raw.challenges)) raw.challenges = [];
+    if (!raw.wheel || typeof raw.wheel !== "object") raw.wheel = {};
     state.data = raw;
   }
 
@@ -260,6 +263,31 @@
         if (state.user) renderAll();
       }
     });
+
+    // Défis + roue (nécessitent les règles élargies)
+    cloud.chalRef = tripRef.collection("challenges");
+    cloud.wheelRef = tripRef.collection("wheel");
+
+    cloud.chalRef.onSnapshot(function (snap) {
+      defisCloud = true;
+      var list = [];
+      snap.forEach(function (d) { list.push(d.data()); });
+      list.sort(function (a, b) { return (a.createdAt || "").localeCompare(b.createdAt || ""); });
+      state.data.challenges = list;
+      saveData();
+      if (state.user) renderDefis();
+    }, function () {
+      defisCloud = false;
+      if (state.user) renderDefis();
+    });
+
+    cloud.wheelRef.onSnapshot(function (snap) {
+      var map = {};
+      snap.forEach(function (d) { map[d.id] = d.data(); });
+      state.data.wheel = map;
+      saveData();
+      if (state.user) renderDefis();
+    }, function () { /* même cause que challenges : règles à élargir */ });
   }
 
   /* ================= Auth / session ================= */
@@ -427,6 +455,7 @@
     renderExpenseGroups();
     renderEquilibre();
     renderStatsTab();
+    renderDefis();
   }
 
   function renderStats() {
@@ -1060,6 +1089,184 @@
     });
   }
 
+  /* ================= Roue des défis ================= */
+
+  var spinning = false, needleRot = 0, wheelBuilt = false;
+
+  function buildWheelDisc() {
+    if (wheelBuilt) return;
+    wheelBuilt = true;
+    var disc = $("#wheel-disc");
+    var stops = CFG.accounts.map(function (a, i) {
+      return a.color + " " + (i * 25) + "% " + ((i + 1) * 25) + "%";
+    });
+    disc.style.background = "conic-gradient(" + stops.join(",") + ")";
+    CFG.accounts.forEach(function (a, i) {
+      var ang = (i * 90 + 45) * Math.PI / 180;
+      var el = document.createElement("span");
+      el.className = "avatar-dot wheel-av";
+      el.style.background = "#0B1120";
+      el.style.color = a.color;
+      el.style.left = (50 + Math.sin(ang) * 34) + "%";
+      el.style.top = (50 - Math.cos(ang) * 34) + "%";
+      el.textContent = initials(a.name);
+      disc.appendChild(el);
+    });
+  }
+
+  // Tirage pondéré selon CFG.wheelWeights (index dans CFG.accounts)
+  function weightedPickIndex() {
+    var w = CFG.wheelWeights || {};
+    var tot = 0;
+    var arr = CFG.accounts.map(function (a) {
+      var v = w[a.id] > 0 ? w[a.id] : 1;
+      tot += v;
+      return v;
+    });
+    var r = Math.random() * tot;
+    for (var i = 0; i < arr.length; i++) {
+      r -= arr[i];
+      if (r < 0) return i;
+    }
+    return arr.length - 1;
+  }
+
+  function spinWheel() {
+    if (spinning) return;
+    var today = todayISO();
+    if (state.data.wheel[today]) { toast("Déjà tiré aujourd'hui, reviens demain !"); return; }
+    if (!state.data.challenges.length) { toast("Crée d'abord un défi en dessous !", true); return; }
+
+    spinning = true;
+    $("#spin-btn").disabled = true;
+    $("#spin-btn").textContent = "Le caribou tourne…";
+    $("#wheel-result").innerHTML = "";
+
+    var idx = weightedPickIndex();
+    var victim = CFG.accounts[idx];
+    var chal = state.data.challenges[(Math.random() * state.data.challenges.length) | 0];
+
+    // fait tourner l'aiguille jusqu'au quart du gagnant (+ un peu de flou)
+    var target = idx * 90 + 45 + (Math.random() * 40 - 20);
+    var cur = ((needleRot % 360) + 360) % 360;
+    needleRot += 5 * 360 + ((target - cur + 360) % 360);
+    $("#wheel-needle").style.transform = "rotate(" + needleRot + "deg)";
+
+    var res = {
+      date: today,
+      memberId: victim.id,
+      challengeId: chal.id,
+      text: chal.text,
+      spunBy: state.user.id,
+      at: new Date().toISOString()
+    };
+    var delay = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 300 : 4800;
+    setTimeout(function () {
+      spinning = false;
+      if (defisCloud && cloud) {
+        cloud.wheelRef.doc(res.date).set(res);
+      } else {
+        state.data.wheel[res.date] = res;
+        saveData();
+      }
+      renderDefis();
+      toast("Le caribou a choisi " + victim.name + " !");
+    }, delay);
+  }
+
+  function addChallenge(text) {
+    var c = { id: uid(), text: text, createdBy: state.user.id, createdAt: new Date().toISOString() };
+    if (defisCloud && cloud) {
+      cloud.chalRef.doc(c.id).set(c);
+    } else {
+      state.data.challenges.push(c);
+      saveData();
+      renderDefis();
+    }
+    toast("Défi ajouté");
+  }
+
+  function deleteChallenge(id) {
+    askConfirm({
+      title: "Supprimer ce défi ?",
+      message: defisCloud ? "Il disparaîtra pour tout le monde." : "Il sera supprimé de cet appareil.",
+      confirmLabel: "Supprimer"
+    }).then(function (yes) {
+      if (!yes) return;
+      if (defisCloud && cloud) {
+        cloud.chalRef.doc(id).delete();
+      } else {
+        state.data.challenges = state.data.challenges.filter(function (c) { return c.id !== id; });
+        saveData();
+        renderDefis();
+      }
+      toast("Défi supprimé");
+    });
+  }
+
+  function renderDefis() {
+    if (!state.user) return;
+    buildWheelDisc();
+    $("#defis-warn").hidden = !(cloud && !defisCloud);
+
+    var today = todayISO();
+    var res = state.data.wheel[today];
+    var btn = $("#spin-btn");
+    if (!spinning) {
+      btn.disabled = !!res;
+      btn.textContent = res ? "Déjà tiré aujourd'hui" : "Lancer la roue";
+    }
+    if (!spinning) renderWheelResult(res);
+    renderChallengeList();
+    renderWheelHistory();
+  }
+
+  function renderWheelResult(res) {
+    var box = $("#wheel-result");
+    if (!res) {
+      box.innerHTML = '<p class="empty-state">Personne n\'a encore tourné la roue aujourd\'hui.</p>';
+      return;
+    }
+    var m = member(res.memberId);
+    box.innerHTML = '<div class="wheel-victim">' + avatarDot(m) +
+      '<div><p class="wv-name">' + esc(m.name) + " !</p>" +
+      '<p class="wv-chal">' + esc(res.text) + "</p>" +
+      '<p class="wv-by">tiré par ' + esc(member(res.spunBy).name) + "</p></div></div>";
+  }
+
+  function renderChallengeList() {
+    var list = $("#challenge-list");
+    if (!state.data.challenges.length) {
+      list.innerHTML = '<li class="empty-state"><strong>Aucun défi</strong>Ajoute la première idée au-dessus !</li>';
+      return;
+    }
+    var trash = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>';
+    list.innerHTML = state.data.challenges.map(function (c) {
+      var m = member(c.createdBy);
+      return '<li class="challenge-item">' + avatarDot(m, "mini-dot") +
+        '<span class="challenge-text">' + esc(c.text) + "</span>" +
+        '<button type="button" class="icon-btn chal-del" data-id="' + c.id + '" aria-label="Supprimer le défi">' + trash + "</button></li>";
+    }).join("");
+  }
+
+  function renderWheelHistory() {
+    var list = $("#wheel-history");
+    var today = todayISO();
+    var dates = Object.keys(state.data.wheel).filter(function (d) { return d !== today; }).sort().reverse().slice(0, 5);
+    if (!dates.length) {
+      list.innerHTML = '<li class="empty-state">Les anciens tirages apparaîtront ici.</li>';
+      return;
+    }
+    list.innerHTML = dates.map(function (d) {
+      var r = state.data.wheel[d];
+      var m = member(r.memberId);
+      var dl = new Date(d + "T00:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
+      return '<li class="challenge-item"><span class="wh-date">' + esc(dl) + "</span>" +
+        avatarDot(m, "mini-dot") +
+        '<span class="challenge-text">' + esc(m.name) + " · " + esc(r.text) + "</span></li>";
+    }).join("");
+  }
+
   /* ================= Export Excel ================= */
 
   function exportExcel() {
@@ -1277,6 +1484,20 @@
       }
     });
     $("#export-xlsx-btn").addEventListener("click", exportExcel);
+
+    // Roue des défis
+    $("#spin-btn").addEventListener("click", spinWheel);
+    $("#challenge-form").addEventListener("submit", function (e) {
+      e.preventDefault();
+      var v = $("#challenge-input").value.trim();
+      if (!v) return;
+      addChallenge(v);
+      $("#challenge-input").value = "";
+    });
+    document.addEventListener("click", function (e) {
+      var btn = e.target.closest ? e.target.closest(".chal-del") : null;
+      if (btn) deleteChallenge(btn.dataset.id);
+    });
     $("#reset-btn").addEventListener("click", function () {
       askConfirm({
         title: "Tout effacer ?",

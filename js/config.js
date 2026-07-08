@@ -19,6 +19,10 @@ window.CARIBOU_CONFIG = {
   // Taux par défaut : 1 EUR = X CAD (modifiable ensuite dans Réglages)
   eurToCadDefault: 1.48,
 
+  // ---- ROUE DES DÉFIS ----
+  // Poids de chaque compte dans le tirage quotidien (total libre).
+  wheelWeights: { bastien: 20, leo: 20, simon: 40, axel: 20 },
+
   // ---- SYNCHRO CLOUD (Firebase Firestore) ----
   // Identifiant du voyage dans la base (le suffixe aléatoire évite les curieux).
   // Ne pas le changer une fois les comptes lancés.

@@ -108,6 +108,10 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg>
         <span>Stats</span>
       </button>
+      <button class="tab" data-tab="defis">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
+        <span>Défis</span>
+      </button>
       <button class="tab" data-tab="reglages">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.01a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.01a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg>
         <span>Réglages</span>
@@ -217,6 +221,60 @@
         </article>
 
         <div id="stats-records" class="records-grid"></div>
+      </section>
+
+      <!-- ===== Défis ===== -->
+      <section id="tab-defis" class="tab-panel">
+        <article class="card">
+          <h2 class="card-title">La roue du caribou</h2>
+          <p class="card-sub">Un tirage par jour : le caribou désigne qui fait le défi.</p>
+          <p class="card-sub defis-warn" id="defis-warn" hidden>Synchro des défis inactive : mets à jour les règles Firestore (voir README). En attendant, roue et défis restent sur cet appareil.</p>
+
+          <div class="wheel-wrap">
+            <div class="wheel-disc" id="wheel-disc"></div>
+            <div class="wheel-needle" id="wheel-needle">
+              <svg class="caribou-needle" viewBox="0 0 80 110" aria-hidden="true">
+                <g fill="none" stroke="#FBBF24" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M31 34 C26 24 20 18 11 12"/>
+                  <path d="M25 24 C19 22 15 16 13 8"/>
+                  <path d="M20 17 C16 15 13 11 12 5"/>
+                  <path d="M49 34 C54 24 60 18 69 12"/>
+                  <path d="M55 24 C61 22 65 16 67 8"/>
+                  <path d="M60 17 C64 15 67 11 68 5"/>
+                </g>
+                <ellipse cx="24" cy="42" rx="7" ry="4.5" fill="#D8891A" transform="rotate(-30 24 42)"/>
+                <ellipse cx="56" cy="42" rx="7" ry="4.5" fill="#D8891A" transform="rotate(30 56 42)"/>
+                <ellipse cx="40" cy="52" rx="15" ry="19" fill="#F59E0B"/>
+                <circle cx="33" cy="47" r="2.6" fill="#0B1120"/>
+                <circle cx="47" cy="47" r="2.6" fill="#0B1120"/>
+                <ellipse cx="40" cy="64" rx="8" ry="6.5" fill="#B4700D"/>
+                <ellipse cx="40" cy="63" rx="3.2" ry="2.4" fill="#0B1120"/>
+              </svg>
+              <span class="needle-shaft" aria-hidden="true"></span>
+            </div>
+            <div class="wheel-hub" aria-hidden="true"></div>
+          </div>
+
+          <div class="wheel-actions">
+            <button class="btn-primary" id="spin-btn">Lancer la roue</button>
+          </div>
+          <div id="wheel-result" class="wheel-result"></div>
+        </article>
+
+        <article class="card">
+          <h2 class="card-title">Les défis du crew</h2>
+          <p class="card-sub">Ajoute des idées : la roue en pioche un au hasard à chaque tirage.</p>
+          <form id="challenge-form" class="challenge-form">
+            <input type="text" id="challenge-input" placeholder="Ex : parler québécois pendant 1 heure" maxlength="120" required>
+            <button type="submit" class="btn-primary btn-sm">Ajouter</button>
+          </form>
+          <ul id="challenge-list" class="challenge-list"></ul>
+        </article>
+
+        <article class="card">
+          <h2 class="card-title">Derniers tirages</h2>
+          <ul id="wheel-history" class="wheel-history"></ul>
+        </article>
       </section>
 
       <!-- ===== Réglages ===== -->

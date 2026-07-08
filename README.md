@@ -76,13 +76,16 @@ service cloud.firestore {
   match /databases/{database}/documents {
     match /trips/canada-2026-vx4k7p {
       allow read, write: if true;
-      match /expenses/{expenseId} {
+      match /{document=**} {
         allow read, write: if true;
       }
     }
   }
 }
 ```
+
+> Le `{document=**}` couvre toutes les sous-collections du voyage :
+> `expenses` (dépenses), `challenges` (défis) et `wheel` (roue du jour).
 
 > Le chemin `canada-2026-vx4k7p` doit correspondre au `tripId` de `js/config.js`.
 > Ces règles n'ouvrent QUE le document du voyage (le suffixe aléatoire fait office
